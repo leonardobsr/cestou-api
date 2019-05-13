@@ -10,10 +10,10 @@ const config = {
 		database_uri: 'mongodb://cestou:C35t0u1429318295@localhost:25012/cestou',
 		mount: '/parse/v1',
 		cloud_code_main: '/cloudcode/v1/main.js',
-		url: 'http://127.0.0.1:7113/parse/v1',
-		port: 7113,
+		url: 'http://127.0.0.1:7114/parse/v1',
+		port: 7114,
 		https: false,
-		verifyUserEmails: true,
+		verifyUserEmails: false,
 		cert: {
 			public: '/cert/',
 			private: '/cert/'
