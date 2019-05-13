@@ -1,47 +1,56 @@
 const config = require('./config/env-variables');
+const _ = require ('underscore');
 
 var fs = require('fs');
 var express = require('express');
+var bodyParser = require('body-parser');
 var ParseServer = require('parse-server').ParseServer;
 var ParseDashboard = require('parse-dashboard');
-var path = require('path');
+var S3Adapter = require("@parse/s3-files-adapter");
+var AWS = require("aws-sdk");
 
+var app = express();
+app.use(bodyParser.json({limit: "100mb"}));
+app.use(bodyParser.urlencoded({limit: "100mb", extended: true, parameterLimit: 100000}));
+
+var apps = [];
 var server = null;
 
 var fileAdapter = undefined;
 var mailAdapter = undefined;
 
 if(config.file_adapter.on){
-  
-  let FSFilesAdapter = require('parse-server-fs-adapter');
+
+  let FSFilesAdapter = require('@parse/fs-files-adapter');
   let fsAdapter = new FSFilesAdapter({
     "filesSubDirectory": config.file_adapter.root_folder
   });
 
   fileAdapter = fsAdapter;
-}else if(config.s3_file_adapter.on){
-  
-  let S3Adapter = require('parse-server-s3-adapter');
-  let s3Adapter = new S3Adapter(
-    config.s3_file_adapter.accesskey,
-    config.s3_file_adapter.secretkey,
-    bucket, {
-      region: config.s3_file_adapter.bucket.region,
-      bucketPrefix: config.s3_file_adapter.bucket.prefix,
-      directAccess: config.s3_file_adapter.bucket.direct_access,
-      baseUrl: config.s3_file_adapter.bucket.base_url,
-      signatureVersion: config.s3_file_adapter.bucket.signature_version,
-      globalCacheControl: config.s3_file_adapter.bucket.global_cache_control
+} else if(config.s3_file_adapter.on){
+  //Configure Digital Ocean Spaces EndPoint
+  const spacesEndpoint = new AWS.Endpoint("sfo2.digitaloceanspaces.com");
+  var s3Options = {
+    bucket: "meditamais",
+    baseUrl: "https://meditamais.sfo2.digitaloceanspaces.com", 
+    region: "sfo2",
+    directAccess: true,
+    globalCacheControl: "public, max-age=31536000", 
+    bucketPrefix: "appFiles/",
+    s3overrides: {
+      accessKeyId: "MGODMYYQNNRLO3SOEVZ2",
+      secretAccessKey: "UYQ4cd+/iHQdx5PDbDDQCOTW/VvOaza+0j35toPR0Os",
+      endpoint: spacesEndpoint
     }
-  );
+  };
 
-  fileAdapter = s3Adapter;
+  fileAdapter = new S3Adapter(s3Options);
 }
 
 if(config.mail_adapter.on){
-  
+
   let mailGunAdapter = {
-    module: 'parse-server-simple-mailgun-adapter',
+    module: '@parse/simple-mailgun-adapter',
     options: {
       fromAddress: config.mail_adapter.from_address,
       domain: config.mail_adapter.domain,
@@ -49,67 +58,72 @@ if(config.mail_adapter.on){
     }
   }
 
-  mailAdapter = mailGunAdapter; 
+  mailAdapter = mailGunAdapter;
 }
 
-var apiV1 = new ParseServer({
-  databaseURI: config.parse_server.database_uri,
-  cloud: __dirname + config.parse_server.cloud_code_main,
-  appId: config.parse_server.application_id,
-  masterKey: config.parse_server.master_key,
-  restAPIKey: config.parse_server.rest_api_key,
-  javascriptKey: config.parse_server.javascript_key,
-  serverURL: config.parse_server.url,
-  publicServerURL: config.parse_server.url,
-  verbose: config.parse_server.verbose,
-  verifyUserEmails: config.parse_server.verifyUserEmails,
-  accountLockout: config.parse_server.accountLockout,
-  filesAdapter: fileAdapter,
-  appName: config.parse_server.name,
-  emailAdapter: mailAdapter,
-  // push: {
-  //   ios: [
-  //     {
-  //       pfx: './certificates/MinhaVanP12Dist.p12',
-  //       bundleId: 'com.br.minhavan',
-  //       production: true
-  //     },
-  //     {
-  //       pfx: './certificates/MinhaVanp12Dev.p12',
-  //       bundleId: 'com.br.minhavan',
-  //       production: false
-  //     }
-  //   ]
-  // },
-  liveQuery: {
-    classNames: config.parse_server.livequery.classNames
-  }
+_.each(config.versions, function(version){
+
+  apps.push(
+    {
+      appId: version.parse_server.application_id,
+      masterKey: version.parse_server.master_key,
+      javascriptKey: version.parse_server.javascript_key,
+      serverURL: version.parse_server.url,
+      appName: version.parse_server.name
+    }
+  );
+
+  var api = new ParseServer({
+    databaseURI: version.parse_server.database_uri,
+    cloud: __dirname + version.parse_server.cloud_code_main,
+    appId: version.parse_server.application_id,
+    masterKey: version.parse_server.master_key,
+    restAPIKey: version.parse_server.rest_api_key,
+    javascriptKey: version.parse_server.javascript_key,
+    serverURL: version.parse_server.url,
+    publicServerURL: version.parse_server.url,
+    verbose: config.verbose,
+    logLevel: 3,
+    verifyUserEmails: config.verifyUserEmails,
+    accountLockout: config.accountLockout,
+    filesAdapter: fileAdapter,
+    appName: version.parse_server.name,
+    emailAdapter: mailAdapter,
+    maxUploadSize: version.parse_server.maxUploadSize,
+    // push: {
+    //   ios: [
+    //     {
+    //       pfx: './certificates/xxxxxxx.p12',
+    //       bundleId: 'xxxxxxx',
+    //       production: true
+    //     },
+    //     {
+    //       pfx: './certificates/xxxxxxx.p12',
+    //       bundleId: 'xxxxxxx',
+    //       production: false
+    //     }
+    //   ]
+    // },
+    liveQuery: {
+      classNames: config.livequery.classNames
+    }
+  });
+
+  // Serve the Parse API on the /parse URL prefix
+  app.use(version.parse_server.mount, api);
 });
 
-var allowInsecureHTTP = (config.parse_server.https)? false : true ;
+var allowInsecureHTTP = (config.https)? false : true ;
 var dashboard = new ParseDashboard({
-  "apps": [
-    {
-      appId: config.parse_server.application_id,
-      masterKey: config.parse_server.master_key,
-      javascriptKey: config.parse_server.javascript_key,
-      serverURL: config.parse_server.url,
-      appName: config.parse_server.name
-    }
-  ],
+  "apps": apps,
   "trustProxy": 1,
   "users": [
     {
-      "user": config.parse_server.user,
-      "pass": config.parse_server.pass
+      "user": config.user,
+      "pass": config.pass
     }
   ]
 },allowInsecureHTTP);
-
-var app = express();
-
-// Serve the Parse API on the /parse URL prefix
-app.use(config.parse_server.mount, apiV1);
 
 // Parse Server plays nicely with the rest of your web routes
 app.get('/', function(req, res) {
@@ -119,10 +133,10 @@ app.get('/', function(req, res) {
 // Serve the Parse API on the /dashboard
 app.use('/dashboard/', dashboard);
 
-if(config.parse_server.https){
+if(config.https){
   var options = {
-    cert: fs.readFileSync(config.parse_server.cert.public, 'utf8'),
-    key: fs.readFileSync(config.parse_server.cert.private, 'utf8')
+    cert: fs.readFileSync(config.cert.public, 'utf8'),
+    key: fs.readFileSync(config.cert.private, 'utf8')
   };
   server = require('https').createServer(options, app);
   console.log('Server running on https.');
@@ -131,11 +145,11 @@ if(config.parse_server.https){
   console.log('Server running on http.');
 }
 
-server.listen(config.parse_server.port, function() {
-  console.log('Server running on port ' + config.parse_server.port + '.');
+server.listen(config.port, function() {
+  console.log('Server running on port ' + config.port + '.');
 });
 
 //This will enable the Live Query real-time server
-if(config.parse_server.livequery.on){
+if(config.livequery.on){
   ParseServer.createLiveQueryServer(server);
 }
