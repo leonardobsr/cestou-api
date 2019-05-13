@@ -49,7 +49,7 @@ const config = {
 				database_uri: 'mongodb://cestou:C35t0u1429318295@127.0.0.1:25012/cestou',
 				mount: '/parse',
 				cloud_code_main: '/cloudcode/v1/main.js',
-				url: 'http://127.0.0.1:7114/parse',
+				url: 'http://api.cestou.mocka.site/parse',
 				maxUploadSize: '100mb'
 			}
 		}
