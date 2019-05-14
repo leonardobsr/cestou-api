@@ -13,7 +13,7 @@ Parse.Cloud.define('saveShopping', async function(request, response){
 	  throw 'Needs user to execute task.';
 	}else{
 	  let objectsToSave = [];
-	  let shoppingDate = new Date(request.params.shopping.date);
+	  let shoppingDate = new Date(request.params.date);
   
 	  let Balance = Parse.Object.extend('Balance');
 	  balance = new Balance();
@@ -23,47 +23,46 @@ Parse.Cloud.define('saveShopping', async function(request, response){
   
 	  let Marketplace = Parse.Object.extend('Marketplace');
 	  let marketplace = new Marketplace();
-	  marketplace.set('stateRegistration', request.params.shopping.marketplace.stateRegistration);
-	  marketplace.set('cnpj', request.params.shopping.marketplace.cnpj);
-	  marketplace.set('name', request.params.shopping.marketplace.name);
-	  marketplace.set('address', request.params.shopping.marketplace.address);
+	  marketplace.set('stateRegistration', request.params.marketplace.stateRegistration);
+	  marketplace.set('cnpj', request.params.marketplace.cnpj);
+	  marketplace.set('name', request.params.marketplace.name);
+	  marketplace.set('address', request.params.marketplace.address);
 	  objectsToSave.push(marketplace);
   
 	  let Shopping = Parse.Object.extend('Shopping');
 	  let shopping = new Shopping();
 	  shopping.set('balance', balance);
 	  shopping.set('marketplace', marketplace);
-	  shopping.set('accessKey', request.params.shopping.accessKey);
-	  shopping.set('authorizationProtocol', request.params.shopping.authorizationProtocol);
-	  shopping.set('date', { __type: 'Date', 'iso': request.params.shopping.date });
+	  shopping.set('accessKey', request.params.accessKey);
+	  shopping.set('date', { __type: 'Date', 'iso': request.params.date });
   
   
 	  let shoppingExpense = 0;
-	  for (let index = 0; index < request.params.shopping.products.length; index++) {
+	  for (let index = 0; index < request.params.products.length; index++) {
 		let Product = Parse.Object.extend('Product');
 		let product = new Product();
 		product.set('marketplace', marketplace);
-		product.set('marketplaceCode', request.params.shopping.products[index].code);
-		product.set('name', request.params.shopping.products[index].name);
+		product.set('marketplaceCode', request.params.products[index].code);
+		product.set('name', request.params.products[index].name);
 		product.set('productCategory', { __type: 'Pointer', className: 'ProductCategory', objectId: "uWlp9ufK8S" });
 		objectsToSave.push(product);
   
-		shoppingExpense += request.params.shopping.products[index].unitPrice * request.params.shopping.products[index].quantity;
+		shoppingExpense += request.params.products[index].unitPrice * request.params.products[index].quantity;
   
 		let ProductHistory = Parse.Object.extend('ProductHistory');
 		let productHistory = new ProductHistory();
 		productHistory.set('shopping', shopping);
 		productHistory.set('product', product);
-		productHistory.set('valueUnit', request.params.shopping.products[index].unitPrice);
-		productHistory.set('quantity', request.params.shopping.products[index].quantity);
-		productHistory.set('unity', request.params.shopping.products[index].unity);
+		productHistory.set('valueUnit', request.params.products[index].unitPrice);
+		productHistory.set('quantity', request.params.products[index].quantity);
+		productHistory.set('unity', request.params.products[index].unity);
 		objectsToSave.push(productHistory);
 	  }
 	  
 	  balance.set('expense', shoppingExpense);
 	  objectsToSave.push(balance);
   
-	  shopping.set('expense', shoppingExpense);
+	  shopping.set('cost', shoppingExpense);
 	  objectsToSave.push(shopping);
   
 	  Parse.Object.saveAll(objectsToSave)
