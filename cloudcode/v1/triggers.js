@@ -12,6 +12,8 @@ Parse.Cloud.beforeSave("Balance", function (request, response) {
       success: function(object) {
         if (!object) {
           object = request.object.save();
+        } else {
+          object.set("expense", request.object.get('expense'));
         }
         response.success(object);
       },
